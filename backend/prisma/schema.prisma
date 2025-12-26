@@ -1,0 +1,424 @@
+// DirectRent Ghana - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+enum UserRole {
+  TENANT
+  LANDLORD
+  SERVICE_PROVIDER
+  ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  RELAX
+  SUPERUSER
+}
+
+model User {
+  id                     String           @id @default(uuid())
+  phone                  String           @unique
+  fullName               String?          @map("full_name")
+  email                  String?          @unique
+  passwordHash           String?          @map("password_hash")
+  role                   UserRole         @default(TENANT)
+  ghanaCardNumber        String?          @map("ghana_card_number")
+  ghanaCardVerified      Boolean          @default(false) @map("ghana_card_verified")
+  profileImageUrl        String?          @map("profile_image_url")
+  
+  // Freemium Logic
+  freeContactsRemaining  Int              @default(3) @map("free_contacts_remaining")
+  freeContactsResetAt    DateTime?        @map("free_contacts_reset_at")
+  subscriptionTier       SubscriptionTier @default(FREE) @map("subscription_tier")
+  subscriptionExpiresAt  DateTime?        @map("subscription_expires_at")
+  
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  properties             Property[]
+  contactUnlocks         ContactUnlock[]
+  fraudReports           FraudReport[]
+  agreementsAsLandlord   RentalAgreement[] @relation("LandlordAgreements")
+  agreementsAsTenant     RentalAgreement[] @relation("TenantAgreements")
+  serviceProvider        ServiceProvider?
+  serviceBookings        ServiceBooking[]
+  favorites              Favorite[]
+  otpCodes               OtpCode[]
+  
+  // Chat Relations
+  conversationsAsA       Conversation[]   @relation("ConversationsAsA")
+  conversationsAsB       Conversation[]   @relation("ConversationsAsB")
+  sentMessages           Message[]
+
+  @@map("users")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  phone     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("otp_codes")
+}
+
+// ============================================
+// PROPERTIES
+// ============================================
+
+enum PropertyType {
+  SINGLE_ROOM
+  CHAMBER_HALL
+  SELF_CONTAINED
+  ONE_BEDROOM
+  TWO_BEDROOM
+  THREE_BEDROOM
+  FOUR_BEDROOM_PLUS
+  APARTMENT
+  HOUSE
+  OFFICE_SPACE
+  SHOP
+  WAREHOUSE
+}
+
+enum RentAdvancePeriod {
+  SIX_MONTHS
+  ONE_YEAR
+  TWO_YEARS
+  THREE_YEARS
+}
+
+enum WaterFlowType {
+  CONSTANT
+  WEEKLY
+  IRREGULAR
+  BOREHOLE
+  NONE
+}
+
+model Property {
+  id                  String            @id @default(uuid())
+  ownerId             String            @map("owner_id")
+  title               String
+  description         String
+  price               Decimal           @db.Decimal(10, 2)
+  rentAdvancePeriod   RentAdvancePeriod @default(ONE_YEAR) @map("rent_advance_period")
+  propertyType        PropertyType      @map("property_type")
+  
+  // Location
+  region              String            // e.g., "Greater Accra"
+  city                String            // e.g., "Accra"
+  neighborhood        String            // e.g., "East Legon"
+  address             String?           // Specific address
+  locationLat         Decimal?          @db.Decimal(10, 8) @map("location_lat")
+  locationLng         Decimal?          @db.Decimal(11, 8) @map("location_lng")
+  
+  // Ghana-Specific Amenities
+  hasSelfMeter        Boolean           @default(false) @map("has_self_meter")
+  waterFlow           WaterFlowType     @default(CONSTANT) @map("water_flow")
+  isWalledGated       Boolean           @default(false) @map("is_walled_gated")
+  hasPopCeiling       Boolean           @default(false) @map("has_pop_ceiling")
+  hasTiledFloor       Boolean           @default(false) @map("has_tiled_floor")
+  hasTiledRoad        Boolean           @default(false) @map("has_tiled_road")
+  noLandlordOnCompound Boolean          @default(false) @map("no_landlord_on_compound")
+  hasKitchenCabinet   Boolean           @default(false) @map("has_kitchen_cabinet")
+  isNewlyBuilt        Boolean           @default(false) @map("is_newly_built")
+  hasBoysQuarters     Boolean           @default(false) @map("has_boys_quarters")
+  hasStoreRoom        Boolean           @default(false) @map("has_store_room")
+  hasParking          Boolean           @default(false) @map("has_parking")
+  hasAC               Boolean           @default(false) @map("has_ac")
+  
+  // Additional amenities as JSON for flexibility
+  additionalAmenities Json?             @map("additional_amenities")
+  
+  // Images
+  images              Json              @default("[]")
+  
+  // Status & Verification
+  isActive            Boolean           @default(true) @map("is_active")
+  verificationStatus  Boolean           @default(false) @map("verification_status")
+  verifiedAt          DateTime?         @map("verified_at")
+  
+  // AI Rent Predictor
+  priceTag            String?           @map("price_tag") // "GREAT_VALUE", "FAIR", "OVERPRICED"
+  neighborhoodAvgPrice Decimal?         @db.Decimal(10, 2) @map("neighborhood_avg_price")
+  
+  viewCount           Int               @default(0) @map("view_count")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  owner               User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contactUnlocks      ContactUnlock[]
+  fraudReports        FraudReport[]
+  rentalAgreements    RentalAgreement[]
+  favorites           Favorite[]
+
+  @@index([neighborhood])
+  @@index([city])
+  @@index([propertyType])
+  @@index([price])
+  @@map("properties")
+}
+
+model ContactUnlock {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  propertyId  String   @map("property_id")
+  unlockedAt  DateTime @default(now()) @map("unlocked_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@map("contact_unlocks")
+}
+
+model Favorite {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  propertyId  String   @map("property_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+  @@map("favorites")
+}
+
+// ============================================
+// FRAUD REPORTING
+// ============================================
+
+enum FraudReportReason {
+  FAKE_LISTING
+  WRONG_LOCATION
+  SCAM
+  ALREADY_RENTED
+  MISLEADING_IMAGES
+  OTHER
+}
+
+model FraudReport {
+  id          String            @id @default(uuid())
+  reporterId  String            @map("reporter_id")
+  propertyId  String            @map("property_id")
+  reason      FraudReportReason
+  description String?
+  status      String            @default("PENDING") // PENDING, REVIEWED, RESOLVED
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  reporter    User              @relation(fields: [reporterId], references: [id])
+  property    Property          @relation(fields: [propertyId], references: [id])
+
+  @@map("fraud_reports")
+}
+
+// ============================================
+// RENTAL AGREEMENTS
+// ============================================
+
+enum AgreementStatus {
+  DRAFT
+  PENDING_LANDLORD_SIGNATURE
+  PENDING_TENANT_SIGNATURE
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+model RentalAgreement {
+  id                  String          @id @default(uuid())
+  propertyId          String          @map("property_id")
+  landlordId          String          @map("landlord_id")
+  tenantId            String          @map("tenant_id")
+  
+  startDate           DateTime        @map("start_date")
+  endDate             DateTime        @map("end_date")
+  monthlyRent         Decimal         @db.Decimal(10, 2) @map("monthly_rent")
+  advancePaid         Decimal         @db.Decimal(10, 2) @map("advance_paid")
+  securityDeposit     Decimal?        @db.Decimal(10, 2) @map("security_deposit")
+  
+  // Terms and conditions
+  terms               Json            @default("{}")
+  
+  // Signatures
+  landlordSignature   String?         @map("landlord_signature") // Base64
+  landlordSignedAt    DateTime?       @map("landlord_signed_at")
+  tenantSignature     String?         @map("tenant_signature") // Base64
+  tenantSignedAt      DateTime?       @map("tenant_signed_at")
+  
+  // E-Stamping (Ghana-specific)
+  stampDutyAmount     Decimal?        @db.Decimal(10, 2) @map("stamp_duty_amount")
+  stampDutyPaid       Boolean         @default(false) @map("stamp_duty_paid")
+  stampDutyReference  String?         @map("stamp_duty_reference")
+  
+  // Generated PDF
+  pdfUrl              String?         @map("pdf_url")
+  
+  status              AgreementStatus @default(DRAFT)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  property            Property        @relation(fields: [propertyId], references: [id])
+  landlord            User            @relation("LandlordAgreements", fields: [landlordId], references: [id])
+  tenant              User            @relation("TenantAgreements", fields: [tenantId], references: [id])
+
+  @@map("rental_agreements")
+}
+
+// ============================================
+// HOME SERVICES & PACKERS/MOVERS
+// ============================================
+
+enum ServiceType {
+  PACKERS_MOVERS
+  ELECTRICIAN
+  PLUMBER
+  PAINTER
+  CLEANER
+  AC_TECHNICIAN
+  CARPENTER
+  MASON
+  TILER
+  GENERAL_HANDYMAN
+}
+
+model ServiceProvider {
+  id              String      @id @default(uuid())
+  userId          String      @unique @map("user_id")
+  serviceType     ServiceType @map("service_type")
+  businessName    String      @map("business_name")
+  description     String?
+  coverageAreas   Json        @default("[]") @map("coverage_areas") // Array of cities/neighborhoods
+  pricing         Json        @default("{}") // Flexible pricing structure
+  rating          Decimal     @default(0) @db.Decimal(2, 1)
+  totalReviews    Int         @default(0) @map("total_reviews")
+  verified        Boolean     @default(false)
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings        ServiceBooking[]
+
+  @@map("service_providers")
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ServiceBooking {
+  id              String        @id @default(uuid())
+  customerId      String        @map("customer_id")
+  providerId      String        @map("provider_id")
+  serviceType     ServiceType   @map("service_type")
+  scheduledDate   DateTime      @map("scheduled_date")
+  scheduledTime   String?       @map("scheduled_time")
+  address         String
+  city            String
+  notes           String?
+  price           Decimal?      @db.Decimal(10, 2)
+  status          BookingStatus @default(PENDING)
+  rating          Int?          // 1-5
+  review          String?
+  completedAt     DateTime?     @map("completed_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  customer        User          @relation(fields: [customerId], references: [id])
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+
+  @@map("service_bookings")
+}
+
+// ============================================
+// NEIGHBORHOOD PRICING (For AI Rent Predictor)
+// ============================================
+
+model NeighborhoodPricing {
+  id              String       @id @default(uuid())
+  region          String
+  city            String
+  neighborhood    String
+  propertyType    PropertyType @map("property_type")
+  avgPrice        Decimal      @db.Decimal(10, 2) @map("avg_price")
+  minPrice        Decimal      @db.Decimal(10, 2) @map("min_price")
+  maxPrice        Decimal      @db.Decimal(10, 2) @map("max_price")
+  sampleSize      Int          @map("sample_size")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@unique([neighborhood, propertyType])
+  @@map("neighborhood_pricing")
+}
+
+// ============================================
+// IN-APP MESSAGING / CHAT
+// ============================================
+
+enum ConversationType {
+  PROPERTY_INQUIRY
+  SERVICE_BOOKING
+  GENERAL
+}
+
+model Conversation {
+  id            String           @id @default(uuid())
+  type          ConversationType @default(GENERAL)
+  participantA  String           @map("participant_a")
+  participantB  String           @map("participant_b")
+  propertyId    String?          @map("property_id")   // For property inquiries
+  bookingId     String?          @map("booking_id")    // For service bookings
+  lastMessage   String?          @map("last_message")
+  lastMessageAt DateTime?        @map("last_message_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+  
+  userA         User             @relation("ConversationsAsA", fields: [participantA], references: [id])
+  userB         User             @relation("ConversationsAsB", fields: [participantB], references: [id])
+  messages      Message[]
+  
+  @@unique([participantA, participantB, propertyId])
+  @@index([participantA])
+  @@index([participantB])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  senderId       String       @map("sender_id")
+  content        String
+  readAt         DateTime?    @map("read_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id])
+  
+  @@index([conversationId])
+  @@index([senderId])
+  @@map("messages")
+}
