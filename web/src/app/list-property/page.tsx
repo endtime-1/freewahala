@@ -107,8 +107,8 @@ export default function ListPropertyPage() {
                                         type="button"
                                         onClick={() => updateField('propertyType', type.value)}
                                         className={`p-3 rounded-xl border-2 text-sm font-medium transition-all ${formData.propertyType === type.value
-                                                ? 'border-pink-500 bg-pink-50 text-pink-600'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-pink-500 bg-pink-50 text-pink-600'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         {type.label}
@@ -246,8 +246,8 @@ export default function ListPropertyPage() {
                                         type="button"
                                         onClick={() => updateField(amenity.field, !formData[amenity.field as keyof typeof formData])}
                                         className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${formData[amenity.field as keyof typeof formData]
-                                                ? 'border-pink-500 bg-pink-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-pink-500 bg-pink-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <span className="text-xl">{amenity.icon}</span>
@@ -274,14 +274,75 @@ export default function ListPropertyPage() {
                         <p className="text-gray-500">Add at least 3 photos of your property</p>
 
                         {/* Photo Upload */}
-                        <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center">
+                        <div
+                            className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-pink-300 transition-colors cursor-pointer"
+                            onClick={() => document.getElementById('photo-input')?.click()}
+                        >
                             <div className="text-4xl mb-4">📷</div>
                             <p className="font-medium text-gray-900 mb-2">Drop photos here or click to upload</p>
                             <p className="text-sm text-gray-500">JPG, PNG up to 10MB each</p>
-                            <button className="mt-4 btn-secondary">
+                            <input
+                                id="photo-input"
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    const files = e.target.files;
+                                    if (files) {
+                                        const newImages: string[] = [];
+                                        Array.from(files).forEach(file => {
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                if (event.target?.result) {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        images: [...prev.images, event.target!.result as string]
+                                                    }));
+                                                }
+                                            };
+                                            reader.readAsDataURL(file);
+                                        });
+                                    }
+                                }}
+                            />
+                            <button type="button" className="mt-4 btn-secondary">
                                 Choose Files
                             </button>
                         </div>
+
+                        {/* Photo Previews */}
+                        {formData.images.length > 0 && (
+                            <div className="space-y-3">
+                                <p className="text-sm font-medium text-gray-700">{formData.images.length} photo(s) selected</p>
+                                <div className="grid grid-cols-3 gap-4">
+                                    {formData.images.map((img, index) => (
+                                        <div key={index} className="relative group">
+                                            <img
+                                                src={img}
+                                                alt={`Property photo ${index + 1}`}
+                                                className="w-full h-24 object-cover rounded-xl"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({
+                                                    ...prev,
+                                                    images: prev.images.filter((_, i) => i !== index)
+                                                }))}
+                                                className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                            >
+                                                ✕
+                                            </button>
+                                            {index === 0 && (
+                                                <span className="absolute bottom-1 left-1 px-2 py-0.5 bg-pink-500 text-white text-xs rounded-full">
+                                                    Cover
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="flex gap-4">
                             <button onClick={() => setStep(2)} className="flex-1 btn-secondary py-4">
@@ -289,7 +350,7 @@ export default function ListPropertyPage() {
                             </button>
                             <button
                                 onClick={handleSubmit}
-                                disabled={isLoading}
+                                disabled={isLoading || formData.images.length < 1}
                                 className="flex-1 btn-primary py-4 disabled:opacity-50"
                             >
                                 {isLoading ? 'Publishing...' : 'Publish Listing'}
