@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import SearchBar from '@/components/SearchBar';
 import FilterPills from '@/components/FilterPills';
@@ -8,6 +8,13 @@ import PropertyCard from '@/components/PropertyCard';
 import MapPropertyPreview from '@/components/MapPropertyPreview';
 import { Property } from '@/lib/api';
 import { useTheme } from '@/context/ThemeContext';
+
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+  const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+  return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
 
 const PropertyMap = dynamic(() => import('@/components/PropertyMap'), {
   ssr: false,
@@ -21,13 +28,6 @@ const PropertyMap = dynamic(() => import('@/components/PropertyMap'), {
   ),
 });
 
-const MOCK_PROPERTIES: Property[] = [
-  { id: '1', title: 'Modern 2 Bedroom Apartment', description: 'Beautiful apartment in East Legon', price: 3500, rentAdvancePeriod: 'ONE_YEAR', propertyType: 'TWO_BEDROOM', region: 'Greater Accra', city: 'Accra', neighborhood: 'East Legon', locationLat: 5.6350, locationLng: -0.1578, images: ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800'], hasSelfMeter: true, waterFlow: 'CONSTANT', isWalledGated: true, noLandlordOnCompound: true, isNewlyBuilt: true, verificationStatus: true, priceTag: 'GREAT_VALUE', viewCount: 245, createdAt: new Date().toISOString(), owner: { id: '1', fullName: 'Kofi Mensah', ghanaCardVerified: true } },
-  { id: '2', title: 'Spacious Chamber and Hall', description: 'Well-maintained at Madina', price: 800, rentAdvancePeriod: 'ONE_YEAR', propertyType: 'CHAMBER_HALL', region: 'Greater Accra', city: 'Accra', neighborhood: 'Madina', locationLat: 5.6781, locationLng: -0.1674, images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800'], hasSelfMeter: true, waterFlow: 'WEEKLY', isWalledGated: false, noLandlordOnCompound: false, isNewlyBuilt: false, verificationStatus: false, priceTag: 'FAIR', viewCount: 89, createdAt: new Date().toISOString(), owner: { id: '2', fullName: 'Ama Serwaa', ghanaCardVerified: false } },
-  { id: '3', title: 'Executive 3 Bedroom House', description: 'Luxury at Airport Residential', price: 8000, rentAdvancePeriod: 'TWO_YEARS', propertyType: 'THREE_BEDROOM', region: 'Greater Accra', city: 'Accra', neighborhood: 'Airport Residential', locationLat: 5.6055, locationLng: -0.1799, images: ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800'], hasSelfMeter: true, waterFlow: 'CONSTANT', isWalledGated: true, noLandlordOnCompound: true, isNewlyBuilt: true, verificationStatus: true, priceTag: 'OVERPRICED', viewCount: 156, createdAt: new Date().toISOString(), owner: { id: '3', fullName: 'Kwame Asante', ghanaCardVerified: true } },
-  { id: '4', title: 'Affordable Single Room', description: 'Clean room at Kasoa', price: 350, rentAdvancePeriod: 'ONE_YEAR', propertyType: 'SINGLE_ROOM', region: 'Central', city: 'Kasoa', neighborhood: 'Kasoa New Town', locationLat: 5.5348, locationLng: -0.4272, images: ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800'], hasSelfMeter: false, waterFlow: 'IRREGULAR', isWalledGated: false, noLandlordOnCompound: false, isNewlyBuilt: false, verificationStatus: false, priceTag: 'GREAT_VALUE', viewCount: 312, createdAt: new Date().toISOString(), owner: { id: '4', fullName: 'Yaw Boateng', ghanaCardVerified: false } },
-];
-
 const STATS = [
   { value: '5,000+', label: 'Properties', icon: '🏠' },
   { value: '10,000+', label: 'Happy Tenants', icon: '😊' },
@@ -37,14 +37,80 @@ const STATS = [
 export default function HomePage() {
   const { isDark } = useTheme();
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [properties] = useState<Property[]>(MOCK_PROPERTIES);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleSearch = (query: string, filters: any) => console.log('Search:', query, filters);
-  const handleFilterToggle = (filterId: string) => setActiveFilters(prev => prev.includes(filterId) ? prev.filter(f => f !== filterId) : [...prev, filterId]);
-  const handlePropertyClick = (id: string) => window.location.href = `/properties/${id}`;
-  const handleFavorite = (id: string) => console.log('Favorite:', id);
+  // Fetch properties from API
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_URL}/properties`);
+        const data = await res.json();
+        if (data.properties) {
+          setProperties(data.properties);
+        } else if (Array.isArray(data)) {
+          setProperties(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch properties:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProperties();
+  }, []);
+
+  // Filter properties based on active filters and search
+  const filteredProperties = useMemo(() => {
+    let result = properties;
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.title?.toLowerCase().includes(query) ||
+        p.neighborhood?.toLowerCase().includes(query) ||
+        p.city?.toLowerCase().includes(query) ||
+        p.region?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply boolean filters
+    if (activeFilters.length > 0) {
+      result = result.filter(property => {
+        return activeFilters.every(filter => {
+          // Check if property has this filter property set to true
+          return (property as any)[filter] === true;
+        });
+      });
+    }
+
+    return result;
+  }, [properties, activeFilters, searchQuery]);
+
+  const handleSearch = (query: string, filters: any) => {
+    setSearchQuery(query);
+  };
+
+  const handleFilterToggle = (filterId: string) => {
+    setActiveFilters(prev =>
+      prev.includes(filterId)
+        ? prev.filter(f => f !== filterId)
+        : [...prev, filterId]
+    );
+  };
+
+  const handlePropertyClick = (id: string) => {
+    window.location.href = `/properties/${id}`;
+  };
+
+  const handleFavorite = (id: string) => {
+    console.log('Favorite:', id);
+  };
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-[#0a0a0f] text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -126,27 +192,62 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Active Filters Indicator */}
+          {activeFilters.length > 0 && (
+            <div className={`mb-4 flex items-center gap-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              <span className="text-sm">Active filters: {activeFilters.length}</span>
+              <button
+                onClick={() => setActiveFilters([])}
+                className="text-sm text-orange-500 hover:text-orange-600 font-medium"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
           {/* Results Count */}
           <p className={`mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{properties.length}</span> properties available
+            <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>{filteredProperties.length}</span> properties available
+            {activeFilters.length > 0 && ` (filtered from ${properties.length})`}
           </p>
 
-          {/* View Content */}
-          {viewMode === 'list' ? (
+          {/* Loading State */}
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="text-center">
+                <div className="animate-spin w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full mx-auto mb-4" />
+                <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>Loading properties...</p>
+              </div>
+            </div>
+          ) : filteredProperties.length === 0 ? (
+            <div className={`text-center py-20 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className="text-5xl mb-4">🏠</p>
+              <p className="text-xl font-semibold mb-2">No properties found</p>
+              <p className="text-sm">Try adjusting your filters or search query</p>
+              {activeFilters.length > 0 && (
+                <button
+                  onClick={() => setActiveFilters([])}
+                  className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          ) : viewMode === 'list' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {properties.map(property => (
+              {filteredProperties.map(property => (
                 <PropertyCard key={property.id} property={property} onClick={handlePropertyClick} onFavorite={handleFavorite} />
               ))}
             </div>
           ) : (
             <div className={`h-[70vh] rounded-2xl relative overflow-hidden ${isDark ? 'border border-white/10' : ''}`}>
-              <PropertyMap properties={properties} onPropertySelect={setSelectedProperty} selectedProperty={selectedProperty} />
+              <PropertyMap properties={filteredProperties} onPropertySelect={setSelectedProperty} selectedProperty={selectedProperty} />
               {selectedProperty && <MapPropertyPreview property={selectedProperty} onClose={() => setSelectedProperty(null)} />}
             </div>
           )}
 
           {/* Load More */}
-          {viewMode === 'list' && (
+          {viewMode === 'list' && filteredProperties.length > 0 && (
             <div className="text-center mt-10">
               <button className={`px-8 py-4 rounded-2xl font-semibold transition-all ${isDark
                 ? 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
@@ -160,3 +261,4 @@ export default function HomePage() {
     </div>
   );
 }
+
