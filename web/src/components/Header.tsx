@@ -45,20 +45,17 @@ export default function Header() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex items-center justify-between h-14 sm:h-16 md:h-20">
                     {/* Logo - Compact on mobile */}
-                    <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-4 h-4 sm:w-5 sm:h-5">
+                    <Link href="/" className="flex items-center gap-1.5 group flex-shrink-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-5 h-5">
                                 <path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.69z" />
                                 <path d="M12 5.432l8.159 8.159c.753.753 1.417.809 1.761.595.694-.43 1.08-1.579 1.08-2.686V19.5a2.25 2.25 0 01-2.25 2.25h-2.25a.75.75 0 01-.75-.75v-3.75a3 3 0 00-3-3h-3a3 3 0 00-3 3V21a.75.75 0 01-.75.75H5.25a2.25 2.25 0 01-2.25-2.25v-8.08c0-1.163.42-2.312 1.157-2.668.375-.18 1.097-.202 1.84.54l8-8z" />
                             </svg>
                         </div>
-                        <div className="hidden xs:flex flex-col">
-                            <span className="text-lg sm:text-xl md:text-2xl font-black tracking-tight">
-                                <span className="text-gray-900">Free</span>
-                                <span className="text-orange-600">Wahala</span>
-                            </span>
-                            <span className="hidden md:block text-[10px] text-gray-500 tracking-wide uppercase -mt-0.5">Rent Direct. No Stress.</span>
-                        </div>
+                        <span className="text-base sm:text-lg md:text-xl font-black tracking-tight">
+                            <span className="text-gray-900">Free</span>
+                            <span className="text-orange-500">Wahala</span>
+                        </span>
                     </Link>
 
                     {/* Desktop Navigation */}
@@ -172,17 +169,17 @@ export default function Header() {
                                 </div>
                             </div>
                         ) : (
-                            /* Logged Out State */
-                            <div className="flex items-center gap-1">
+                            /* Logged Out State - Hide buttons on mobile, show in menu */
+                            <div className="hidden sm:flex items-center gap-2">
                                 <Link
                                     href="/login"
-                                    className="text-[10px] sm:text-xs font-medium text-gray-600 hover:text-gray-900 py-1 px-1.5 sm:px-2 rounded hover:bg-gray-100 transition-colors"
+                                    className="text-sm font-medium text-gray-600 hover:text-gray-900 py-2 px-3 rounded-lg hover:bg-gray-100 transition-colors"
                                 >
                                     Log in
                                 </Link>
                                 <Link
                                     href="/signup"
-                                    className="text-[10px] sm:text-xs font-semibold text-white bg-gradient-to-r from-orange-500 to-red-500 py-1 px-2 sm:px-3 rounded hover:opacity-90 transition-opacity"
+                                    className="text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-red-500 py-2 px-4 rounded-lg hover:opacity-90 transition-opacity shadow-sm"
                                 >
                                     Sign up
                                 </Link>
@@ -268,6 +265,26 @@ export default function Header() {
                                 <span className="text-sm text-gray-500">Theme</span>
                                 <ThemeToggle />
                             </div>
+
+                            {/* Auth buttons for mobile (when logged out) */}
+                            {!user && (
+                                <div className="flex gap-2 px-4 py-3 mx-2 mt-2 border-t border-gray-100">
+                                    <Link
+                                        href="/login"
+                                        className="flex-1 text-center py-2.5 px-4 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Log in
+                                    </Link>
+                                    <Link
+                                        href="/signup"
+                                        className="flex-1 text-center py-2.5 px-4 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-red-500 rounded-lg"
+                                        onClick={() => setIsMenuOpen(false)}
+                                    >
+                                        Sign up
+                                    </Link>
+                                </div>
+                            )}
                         </nav>
                     </div>
                 )}
