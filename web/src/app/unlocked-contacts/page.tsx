@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
+
 interface UnlockedContact {
     id: string;
     property: {
@@ -22,48 +29,49 @@ interface UnlockedContact {
     unlockedAt: string;
 }
 
-// Mock data
-const MOCK_UNLOCKED: UnlockedContact[] = [
-    {
-        id: '1',
-        property: {
-            id: '1',
-            title: 'Modern 2 Bedroom Apartment',
-            neighborhood: 'East Legon',
-            city: 'Accra',
-            price: 3500,
-            images: ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400'],
-        },
-        owner: {
-            fullName: 'Kofi Mensah',
-            phone: '+233 24 123 4567',
-            ghanaCardVerified: true,
-        },
-        unlockedAt: '2024-12-20T10:30:00Z',
-    },
-    {
-        id: '2',
-        property: {
-            id: '2',
-            title: 'Spacious Chamber and Hall',
-            neighborhood: 'Madina',
-            city: 'Accra',
-            price: 800,
-            images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400'],
-        },
-        owner: {
-            fullName: 'Ama Serwaa',
-            phone: '+233 55 987 6543',
-            ghanaCardVerified: false,
-        },
-        unlockedAt: '2024-12-18T14:15:00Z',
-    },
-];
-
 export default function UnlockedContactsPage() {
-    const [contacts, setContacts] = useState<UnlockedContact[]>(MOCK_UNLOCKED);
-    const [contactsRemaining, setContactsRemaining] = useState(1);
+    const [contacts, setContacts] = useState<UnlockedContact[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [contactsRemaining, setContactsRemaining] = useState(3);
     const [subscriptionTier, setSubscriptionTier] = useState('FREE');
+
+    useEffect(() => {
+        fetchUnlockedContacts();
+        // Get user's subscription info
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                setSubscriptionTier(user.subscriptionTier || 'FREE');
+            } catch { }
+        }
+    }, []);
+
+    const fetchUnlockedContacts = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/contacts/unlocked`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setContacts(data.contacts || []);
+                setContactsRemaining(data.remainingContacts ?? 3);
+            }
+        } catch (err) {
+            console.error('Failed to fetch unlocked contacts:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const formatPrice = (price: number) => new Intl.NumberFormat('en-GH').format(price);
 
@@ -74,6 +82,14 @@ export default function UnlockedContactsPage() {
             year: 'numeric',
         });
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -126,13 +142,17 @@ export default function UnlockedContactsPage() {
                                 <div className="flex gap-4">
                                     {/* Property Image */}
                                     <Link href={`/properties/${contact.property.id}`} className="shrink-0">
-                                        <div className="relative w-24 h-24 rounded-xl overflow-hidden">
-                                            <Image
-                                                src={contact.property.images[0]}
-                                                alt={contact.property.title}
-                                                fill
-                                                className="object-cover"
-                                            />
+                                        <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-gray-200">
+                                            {contact.property.images?.[0] ? (
+                                                <Image
+                                                    src={contact.property.images[0]}
+                                                    alt={contact.property.title}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-2xl">🏠</div>
+                                            )}
                                         </div>
                                     </Link>
 

@@ -3,48 +3,33 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
+
 interface Notification {
     id: string;
-    type: 'BOOKING' | 'PAYMENT' | 'SYSTEM' | 'MESSAGE';
+    type: string;
     title: string;
     message: string;
     read: boolean;
     createdAt: string;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-    {
-        id: '1',
-        type: 'BOOKING',
-        title: 'New Booking Request',
-        message: 'Ama S. requested "Wiring Installation" for Dec 24',
-        read: false,
-        createdAt: '30m ago'
-    },
-    {
-        id: '2',
-        type: 'PAYMENT',
-        title: 'Payment Received',
-        message: 'You received GH₵132 for Job #J8823',
-        read: true,
-        createdAt: '1d ago'
-    },
-    {
-        id: '3',
-        type: 'SYSTEM',
-        title: 'Welcome to Featured!',
-        message: 'Your profile is now featured in search results.',
-        read: true,
-        createdAt: '2d ago'
-    }
-];
-
 export default function NotificationDropdown() {
     const [isOpen, setIsOpen] = useState(false);
-    const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [loading, setLoading] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const unreadCount = notifications.filter(n => !n.read).length;
+
+    useEffect(() => {
+        fetchNotifications();
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -57,22 +42,81 @@ export default function NotificationDropdown() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const markAsRead = (id: string) => {
-        setNotifications(prev => prev.map(n =>
-            n.id === id ? { ...n, read: true } : n
-        ));
+    const fetchNotifications = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const response = await fetch(`${API_URL}/notifications`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setNotifications(data.notifications || data || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+        }
     };
 
-    const markAllRead = () => {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const markAsRead = async (id: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/notifications/${id}/read`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            setNotifications(prev => prev.map(n =>
+                n.id === id ? { ...n, read: true } : n
+            ));
+        } catch (err) {
+            console.error('Failed to mark as read:', err);
+        }
     };
 
-    const getIcon = (type: Notification['type']) => {
+    const markAllRead = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/notifications/read-all`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        } catch (err) {
+            console.error('Failed to mark all as read:', err);
+        }
+    };
+
+    const getIcon = (type: string) => {
         switch (type) {
             case 'BOOKING': return '📅';
             case 'PAYMENT': return '💰';
             case 'MESSAGE': return '💬';
             default: return '🔔';
+        }
+    };
+
+    const formatTime = (dateStr: string) => {
+        try {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now.getTime() - date.getTime();
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
+        } catch {
+            return dateStr;
         }
     };
 
@@ -131,7 +175,7 @@ export default function NotificationDropdown() {
                                                     {notification.message}
                                                 </p>
                                                 <p className="text-xs text-gray-400 mt-2">
-                                                    {notification.createdAt}
+                                                    {formatTime(notification.createdAt)}
                                                 </p>
                                             </div>
                                             {!notification.read && (

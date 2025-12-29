@@ -4,39 +4,79 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
+
 interface Property {
     id: string;
     title: string;
-    location: string;
+    neighborhood: string;
+    city: string;
     price: number;
-    image: string;
+    images: string[];
 }
 
-const MOCK_FAVORITES: Property[] = [
-    {
-        id: '1',
-        title: 'Modern 2 Bedroom Apartment',
-        location: 'East Legon, Accra',
-        price: 2500,
-        image: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400',
-    },
-    {
-        id: '3',
-        title: 'Executive 3 Bedroom House',
-        location: 'Airport Residential, Accra',
-        price: 8000,
-        image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-    },
-];
-
 export default function FavoritesPage() {
-    const [favorites, setFavorites] = useState<Property[]>(MOCK_FAVORITES);
+    const [favorites, setFavorites] = useState<Property[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const removeFavorite = (id: string) => {
-        setFavorites(prev => prev.filter(p => p.id !== id));
+    useEffect(() => {
+        fetchFavorites();
+    }, []);
+
+    const fetchFavorites = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/properties/favorites`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setFavorites(data.properties || data || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch favorites:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const formatPrice = (price: number) => `GH₵${price.toLocaleString()}`;
+    const removeFavorite = async (id: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/properties/${id}/favorite`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            setFavorites(prev => prev.filter(p => p.id !== id));
+        } catch (err) {
+            console.error('Failed to remove favorite:', err);
+        }
+    };
+
+    const formatPrice = (price: number) => `GH₵${(price || 0).toLocaleString()}`;
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="animate-spin w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -50,14 +90,18 @@ export default function FavoritesPage() {
                     <div className="space-y-4">
                         {favorites.map((property) => (
                             <div key={property.id} className="bg-white rounded-xl p-4 border border-gray-100 flex items-center gap-4">
-                                <Link href={`/properties/${property.id}`} className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0">
-                                    <Image src={property.image} alt={property.title} fill className="object-cover hover:scale-105 transition-transform" />
+                                <Link href={`/properties/${property.id}`} className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-gray-200">
+                                    {property.images?.[0] ? (
+                                        <Image src={property.images[0]} alt={property.title} fill className="object-cover hover:scale-105 transition-transform" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-2xl">🏠</div>
+                                    )}
                                 </Link>
                                 <div className="flex-1 min-w-0">
                                     <Link href={`/properties/${property.id}`}>
                                         <h3 className="font-semibold text-gray-900 truncate hover:text-pink-600">{property.title}</h3>
                                     </Link>
-                                    <p className="text-sm text-gray-500">{property.location}</p>
+                                    <p className="text-sm text-gray-500">{property.neighborhood}, {property.city}</p>
                                     <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(property.price)}/month</p>
                                 </div>
                                 <div className="flex gap-2">

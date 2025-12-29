@@ -1,8 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
+
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
 
 const TEMPLATES = [
     { id: 'standard', name: 'Standard Rental', description: 'For residential properties', icon: '🏠', popular: true, color: 'from-blue-500 to-cyan-500' },
@@ -10,14 +17,56 @@ const TEMPLATES = [
     { id: 'furnished', name: 'Furnished Property', description: 'With furniture inventory', icon: '🛋️', popular: false, color: 'from-orange-500 to-red-500' },
 ];
 
-const MOCK_AGREEMENTS = [
-    { id: '1', property: 'East Legon 2 Bedroom', tenant: 'Ama Serwaa', status: 'ACTIVE', startDate: '2024-01-01', endDate: '2025-01-01', rent: 3500 },
-    { id: '2', property: 'Cantonments Studio', tenant: 'Kwame Asante', status: 'PENDING_SIGNATURES', startDate: '2024-02-01', endDate: '2025-02-01', rent: 2800 },
-];
+interface Agreement {
+    id: string;
+    property?: { title: string; neighborhood: string; city: string };
+    propertyTitle?: string;
+    tenant?: { fullName: string };
+    tenantName?: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    monthlyRent: number;
+}
 
 export default function AgreementsPage() {
     const { isDark } = useTheme();
-    const [agreements] = useState(MOCK_AGREEMENTS);
+    const [agreements, setAgreements] = useState<Agreement[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('ALL');
+
+    useEffect(() => {
+        fetchAgreements();
+    }, []);
+
+    const fetchAgreements = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/agreements`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setAgreements(data.agreements || data || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch agreements:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const filteredAgreements = agreements.filter(a =>
+        filter === 'ALL' || a.status === filter
+    );
 
     const getStatusStyle = (status: string) => {
         switch (status) {
@@ -27,6 +76,14 @@ export default function AgreementsPage() {
             default: return { bg: 'bg-gray-500/10', text: 'text-gray-500', dot: 'bg-gray-500', label: 'Draft' };
         }
     };
+
+    if (loading) {
+        return (
+            <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#0a0a0f]' : 'bg-gray-50'}`}>
+                <div className="animate-spin w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
 
     return (
         <div className={`min-h-screen ${isDark ? 'bg-[#0a0a0f] text-white' : 'bg-gray-50 text-gray-900'}`}>
@@ -97,18 +154,26 @@ export default function AgreementsPage() {
                             <p className={`mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{agreements.length} agreement{agreements.length !== 1 ? 's' : ''}</p>
                         </div>
                         <div className="flex gap-2">
-                            {['All', 'Active', 'Pending'].map((filter) => (
-                                <button key={filter} className={`px-4 py-2 rounded-xl text-sm transition-colors ${isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                                    {filter}
+                            {[{ key: 'ALL', label: 'All' }, { key: 'ACTIVE', label: 'Active' }, { key: 'PENDING_SIGNATURES', label: 'Pending' }].map((f) => (
+                                <button
+                                    key={f.key}
+                                    onClick={() => setFilter(f.key)}
+                                    className={`px-4 py-2 rounded-xl text-sm transition-colors ${filter === f.key
+                                        ? 'bg-purple-500 text-white'
+                                        : isDark ? 'bg-white/5 text-gray-400 hover:bg-white/10' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    {f.label}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    {agreements.length > 0 ? (
+                    {filteredAgreements.length > 0 ? (
                         <div className="space-y-4">
-                            {agreements.map((agreement) => {
+                            {filteredAgreements.map((agreement) => {
                                 const status = getStatusStyle(agreement.status);
+                                const propertyName = agreement.property?.title || agreement.propertyTitle || 'Property';
+                                const tenantName = agreement.tenant?.fullName || agreement.tenantName || 'Tenant';
                                 return (
                                     <Link key={agreement.id} href={`/agreements/${agreement.id}`} className="block group">
                                         <div className={`backdrop-blur-xl rounded-2xl border p-6 transition-all duration-300 ${isDark ? 'bg-white/5 border-white/10 hover:border-purple-500/30' : 'bg-white border-gray-200 hover:border-purple-300 shadow-lg hover:shadow-xl'}`}>
@@ -118,13 +183,13 @@ export default function AgreementsPage() {
                                                         <span className="text-2xl">📄</span>
                                                     </div>
                                                     <div>
-                                                        <h3 className={`font-semibold group-hover:text-purple-500 transition-colors ${isDark ? 'text-white' : 'text-gray-900'}`}>{agreement.property}</h3>
-                                                        <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Tenant: {agreement.tenant}</p>
+                                                        <h3 className={`font-semibold group-hover:text-purple-500 transition-colors ${isDark ? 'text-white' : 'text-gray-900'}`}>{propertyName}</h3>
+                                                        <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Tenant: {tenantName}</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-6">
                                                     <div className="text-right hidden md:block">
-                                                        <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>GH₵{agreement.rent.toLocaleString()}/mo</p>
+                                                        <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>GH₵{(agreement.monthlyRent || 0).toLocaleString()}/mo</p>
                                                         <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{agreement.startDate} → {agreement.endDate}</p>
                                                     </div>
                                                     <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${status.bg}`}>
