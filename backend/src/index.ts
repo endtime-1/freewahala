@@ -27,7 +27,12 @@ const PORT = process.env.PORT || 3001;
 app.use(helmet());
 app.use(cors({
     origin: process.env.NODE_ENV === 'production'
-        ? ['https://directrent.gh', 'https://app.directrent.gh']
+        ? [
+            'https://freewahala.vercel.app',
+            'https://freewahala-web.vercel.app',
+            'https://directrent.gh',
+            'https://app.directrent.gh'
+        ]
         : ['http://localhost:3000', 'http://localhost:8081'],
     credentials: true,
 }));
