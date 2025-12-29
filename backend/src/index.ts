@@ -17,6 +17,7 @@ import payoutRoutes from './routes/payout.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import chatRoutes from './routes/chat.routes.js';
+import { authenticate } from './middleware/auth.middleware.js';
 
 dotenv.config();
 
@@ -67,7 +68,7 @@ app.use('/api/commissions', commissionRoutes);
 app.use('/api/payouts', payoutRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/chat', chatRoutes);
+app.use('/api/chat', authenticate, chatRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
