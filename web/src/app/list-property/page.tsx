@@ -4,6 +4,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
+
 const PROPERTY_TYPES = [
     { value: 'SINGLE_ROOM', label: 'Single Room' },
     { value: 'CHAMBER_HALL', label: 'Chamber & Hall' },
@@ -32,6 +39,7 @@ export default function ListPropertyPage() {
     const router = useRouter();
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -62,12 +70,59 @@ export default function ListPropertyPage() {
 
     const handleSubmit = async () => {
         setIsLoading(true);
-        // API call would go here
-        setTimeout(() => {
+        setError('');
+
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setError('Please log in to list a property');
+                router.push('/login?redirect=/list-property');
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/properties`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: formData.title,
+                    description: formData.description,
+                    price: parseFloat(formData.price),
+                    rentAdvancePeriod: formData.rentAdvancePeriod,
+                    propertyType: formData.propertyType,
+                    region: formData.region,
+                    city: formData.city,
+                    neighborhood: formData.neighborhood,
+                    address: formData.address,
+                    hasSelfMeter: formData.hasSelfMeter,
+                    waterFlow: formData.waterFlow,
+                    isWalledGated: formData.isWalledGated,
+                    hasPopCeiling: formData.hasPopCeiling,
+                    hasTiledFloor: formData.hasTiledFloor,
+                    noLandlordOnCompound: formData.noLandlordOnCompound,
+                    hasKitchenCabinet: formData.hasKitchenCabinet,
+                    isNewlyBuilt: formData.isNewlyBuilt,
+                    hasParking: formData.hasParking,
+                    images: formData.images,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                alert('Property listed successfully! 🎉');
+                router.push('/');
+            } else {
+                setError(data.error || 'Failed to list property');
+            }
+        } catch (err) {
+            console.error('Submit error:', err);
+            setError('Network error. Please try again.');
+        } finally {
             setIsLoading(false);
-            alert('Property listed successfully!');
-            router.push('/');
-        }, 2000);
+        }
     };
 
     return (
@@ -341,6 +396,13 @@ export default function ListPropertyPage() {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Error Display */}
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl">
+                                {error}
                             </div>
                         )}
 
