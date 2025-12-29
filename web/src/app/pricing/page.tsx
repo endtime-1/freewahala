@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
 
 interface SubscriptionTier { tier: string; name: string; price: number; contacts: string | number; features: string[]; duration: string; currency: string; }
 
@@ -52,7 +57,7 @@ export default function PricingPage() {
 
     const fetchTiers = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/subscriptions/tiers`);
+            const res = await fetch(`${API_URL}/subscriptions/tiers`);
             const data = await res.json();
             if (data.tiers) setTiers(data.tiers);
         } catch (err) { }
@@ -65,7 +70,7 @@ export default function PricingPage() {
         setError(null);
         try {
             const token = localStorage.getItem('token');
-            const initRes = await fetch(`${API_URL}/api/subscriptions/initialize-payment`, {
+            const initRes = await fetch(`${API_URL}/subscriptions/initialize-payment`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tier }),
@@ -73,7 +78,7 @@ export default function PricingPage() {
             const initData = await initRes.json();
             if (!initData.success) throw new Error(initData.error);
             if (initData.devMode) {
-                const completeRes = await fetch(`${API_URL}/api/subscriptions/dev-complete`, {
+                const completeRes = await fetch(`${API_URL}/subscriptions/dev-complete`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tier, reference: initData.reference }),
