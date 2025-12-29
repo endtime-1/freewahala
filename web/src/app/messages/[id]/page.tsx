@@ -5,7 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Handle both cases: env var with or without /api suffix
+const getApiUrl = () => {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return base.endsWith('/api') ? base : `${base}/api`;
+}
+const API_URL = getApiUrl();
 
 interface Message {
     id: string;
@@ -83,7 +88,7 @@ export default function ChatPage() {
                 return;
             }
 
-            const response = await fetch(`${API_URL}/api/chat/conversations/${conversationId}`, {
+            const response = await fetch(`${API_URL}/chat/conversations/${conversationId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -110,7 +115,7 @@ export default function ChatPage() {
         setIsSending(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${API_URL}/api/chat/messages`, {
+            const response = await fetch(`${API_URL}/chat/messages`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
